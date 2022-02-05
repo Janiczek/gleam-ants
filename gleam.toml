@@ -1,0 +1,17 @@
+name = "ants"
+version = "1.0.0"
+licences = ["Apache-2.0"]
+description = "Ants simulation in Gleam"
+
+repository = { type = "github", user = "Janiczek", repo = "gleam-ants" }
+links = []
+
+[dependencies]
+gleam_stdlib = "~> 0.18"
+gleam_erlang = "~> 0.7"
+gleam_http = "~> 2.1"
+gleam_elli = "~> 0.5"
+gleam_otp = "~> 0.3"
+
+[dev-dependencies]
+gleeunit = "~> 0.1"
