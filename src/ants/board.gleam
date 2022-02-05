@@ -1,6 +1,6 @@
 import ants/position.{Position}
 import ants/config
-import ants/cell.{Cell, FoodCell, HomeCell}
+import ants/cell.{Cell}
 import gleam/bool
 import gleam/option.{Option}
 import gleam/set.{Set}
@@ -30,12 +30,12 @@ pub fn new() -> Board {
 
   let home_cells: List(#(Position, Cell)) =
     home_positions
-    |> list.map(fn(position) { #(position, HomeCell) })
+    |> list.map(fn(position) { #(position, cell.HomeCell) })
 
   let food_cells: List(#(Position, Cell)) =
     sample_n(n: config.food_places, from: possible_food_positions)
     |> list.map(fn(position) {
-      #(position, FoodCell(random_int(config.food_range + 1) - 1))
+      #(position, cell.FoodCell(random_int(config.food_range + 1) - 1))
     })
 
   let cells =
@@ -48,8 +48,8 @@ pub fn new() -> Board {
 
 pub type Msg {
   Evaporate
-  TakeFood
-  MarkWithPheromone
+  TakeFood(position: Position)
+  MarkWithPheromone(position: Position)
   GiveCellInfo(position: Position, to: Sender(Option(Cell)))
   GiveBoard(to: Sender(Board))
 }
@@ -57,23 +57,34 @@ pub type Msg {
 pub fn update(msg: Msg, board: Board) -> Next(Board) {
   case msg {
     Evaporate -> evaporate(board)
-    TakeFood -> take_food(board)
-    MarkWithPheromone -> mark_with_pheromone(board)
+    TakeFood(position) -> take_food(position, board)
+    MarkWithPheromone(position) -> mark_with_pheromone(position, board)
     GiveCellInfo(position, chan) -> give_cell_info(position, chan, board)
     GiveBoard(chan) -> give_board(chan, board)
   }
 }
 
 fn evaporate(board: Board) -> Next(Board) {
-  io.println("TODO evaporate board")
-  Continue(board)
+  Continue(
+    Board(
+      ..board,
+      cells: board.cells
+      |> map.map_values(fn(_, cell) {
+        case cell {
+          cell.PheromoneCell(amount) ->
+            cell.PheromoneCell(amount *. config.evaporation_rate)
+          _ -> cell
+        }
+      }),
+    ),
+  )
 }
 
-fn take_food(board: Board) -> Next(Board) {
+fn take_food(position: Position, board: Board) -> Next(Board) {
   todo("take_food board")
 }
 
-fn mark_with_pheromone(board: Board) -> Next(Board) {
+fn mark_with_pheromone(position: Position, board: Board) -> Next(Board) {
   todo("mark_with_pheromone board")
 }
 

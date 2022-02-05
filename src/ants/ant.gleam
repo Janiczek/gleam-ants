@@ -62,8 +62,13 @@ fn behave_without_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
 }
 
 fn take_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
-  io.println("TODO take food")
-  Continue(ant)
+  assert AntWithoutFood = ant.status
+  assert Some(cell.FoodCell(_)) = get_cell(board, ant.position)
+
+  take_food_from_board(board, ant.position)
+  let new_ant: Ant = Ant(..ant, status: AntWithFood)
+  let new_ant: Ant = turn_opposite(new_ant)
+  Continue(new_ant)
 }
 
 fn go_to_cell(candidate: Candidate, ant: Ant) -> Next(Ant) {
@@ -74,10 +79,8 @@ fn go_to_cell(candidate: Candidate, ant: Ant) -> Next(Ant) {
   Continue(new_ant)
 }
 
-fn turn_opposite(ant: Ant) -> Next(Ant) {
-  let new_ant: Ant =
-    Ant(..ant, direction: direction.turn_opposite(ant.direction))
-  Continue(new_ant)
+fn turn_opposite(ant: Ant) -> Ant {
+  Ant(..ant, direction: direction.turn_opposite(ant.direction))
 }
 
 type Candidate {
@@ -100,7 +103,7 @@ fn search_for_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
 
   case next {
     Some(chosen) -> go_to_cell(chosen, ant)
-    None -> turn_opposite(ant)
+    None -> Continue(turn_opposite(ant))
   }
 }
 
@@ -145,6 +148,10 @@ fn random_candidate(candidates: List(Candidate)) -> Option(Candidate) {
 
 fn get_cell(board: Sender(board.Msg), position: Position) -> Option(Cell) {
   actor.call(board, fn(chan) { board.GiveCellInfo(position, chan) }, 50)
+}
+
+fn take_food_from_board(board: Sender(board.Msg), position: Position) {
+  actor.send(board, board.TakeFood(position))
 }
 
 /// TODO: this would be nice to have in the stdlib

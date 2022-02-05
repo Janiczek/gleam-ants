@@ -33,7 +33,7 @@ type Msg
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Time.every 100 (\_ -> Tick)
+    Time.every 40 (\_ -> Tick)
 
 
 init : () -> ( Model, Cmd Msg )
