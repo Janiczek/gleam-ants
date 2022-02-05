@@ -66,6 +66,8 @@ fn take_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
 }
 
 fn go_to_cell(candidate: Candidate, ant: Ant) -> Next(Ant) {
+  // TODO can't go out of bounds
+  // TODO can't go where another ant already is
   let new_ant: Ant =
     Ant(..ant, direction: candidate.direction, position: candidate.position)
   Continue(new_ant)
