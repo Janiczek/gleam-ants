@@ -1,7 +1,7 @@
 import ants/direction.{Direction}
 import ants/position.{Position}
-import gleam/dynamic
-import gleam/otp/actor.{Next}
+import gleam/io
+import gleam/otp/actor.{Continue, Next}
 
 pub type Ant {
   Ant(status: AntStatus, direction: Direction, position: Position)
@@ -22,23 +22,24 @@ pub type Msg {
 
 pub fn update(msg: Msg, ant: Ant) -> Next(Ant) {
   case msg {
-    Tick -> todo
+    Tick -> tick(ant)
   }
 }
 
-fn behave(ant: Ant) -> Ant {
+fn tick(ant: Ant) -> Next(Ant) {
+  io.debug(ant)
   case ant.status {
     AntWithFood -> behave_with_food(ant)
     AntWithoutFood -> behave_without_food(ant)
   }
 }
 
-fn behave_with_food(ant: Ant) -> Ant {
-  // TODO do something
-  ant
+fn behave_with_food(ant: Ant) -> Next(Ant) {
+  todo("behave with food")
+  Continue(ant)
 }
 
-fn behave_without_food(ant: Ant) -> Ant {
-  // TODO do something
-  ant
+fn behave_without_food(ant: Ant) -> Next(Ant) {
+  todo("behave without food")
+  Continue(ant)
 }

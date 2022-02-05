@@ -1,9 +1,6 @@
 import gleam/list
 import ants/position.{Position}
 
-external fn random_int(n: Int) -> Int =
-  "rand" "uniform"
-
 pub type Direction {
   N
   NE
@@ -88,3 +85,7 @@ pub fn visible_directions(for dir: Direction) -> List(Direction) {
   [n - 1, n, n + 1]
   |> list.map(from_int)
 }
+
+/// TODO: this would be nice to have in the stdlib
+external fn random_int(n: Int) -> Int =
+  "rand" "uniform"

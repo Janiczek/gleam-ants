@@ -1,6 +1,7 @@
 import ants/config
 import ants/direction
 import ants/position
+import ants/board.{Board}
 import ants/ant.{Ant}
 import gleam/io
 import gleam/list
@@ -11,9 +12,15 @@ import gleam/otp/process.{Sender}
 pub fn start() {
   io.println("Spawning ants")
 
+  spawn_board()
   spawn_ants()
-  start_evaporation_timer()
   io.println("Simulation started!")
+}
+
+fn spawn_board() {
+  let new_board: Board = board.new()
+  assert Ok(sender) = actor.start(new_board, board.update)
+  start_evaporation_timer(sender)
 }
 
 fn spawn_ants() {
@@ -31,18 +38,19 @@ fn spawn_ants() {
 fn start_ant_timer(ant) {
   run_periodically(
     every: config.ant_tick_ms,
-    run: fn() { io.println("TODO: send Tick to the ant") },
+    run: fn() { process.send(ant, ant.Tick) },
   )
-  //run: fn() { process.send(ant, ant.Tick) }
 }
 
-fn start_evaporation_timer() {
+fn start_evaporation_timer(board) {
   run_periodically(
     every: config.evaporation_tick_ms,
-    run: fn() { io.println("TODO: evaporate a little") },
+    run: fn() { process.send(board, board.Evaporate) },
   )
 }
 
+/// Taken from:
+/// https://github.com/gleam-lang/otp/blob/main/test/gleam/periodic_actor.gleam
 fn run_periodically(
   every period_milliseconds: Int,
   run callback: fn() -> a,
