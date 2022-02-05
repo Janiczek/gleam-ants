@@ -2,6 +2,8 @@ import ants/direction.{Direction}
 import ants/position.{Position}
 import ants/cell.{Cell, FoodCell}
 import ants/board
+import gleam/int
+import gleam/order
 import gleam/string
 import gleam/list
 import gleam/otp/process.{Sender}
@@ -59,7 +61,8 @@ fn behave_without_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
 }
 
 fn take_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
-  todo("take food")
+  io.println("TODO take food")
+  Continue(ant)
 }
 
 fn go_to_cell(candidate: Candidate, ant: Ant) -> Next(Ant) {
@@ -90,7 +93,7 @@ fn search_for_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
   let next: Option(Candidate) =
     best_food(candidates)
     |> option.lazy_or(fn() { best_pheromone(candidates) })
-    |> option.lazy_or(fn() { first_candidate(candidates) })
+    |> option.lazy_or(fn() { random_candidate(candidates) })
 
   case next {
     Some(chosen) -> go_to_cell(chosen, ant)
@@ -99,8 +102,19 @@ fn search_for_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
 }
 
 fn best_food(candidates: List(Candidate)) -> Option(Candidate) {
-  io.println("TODO best food")
-  None
+  candidates
+  |> list.filter_map(fn(candidate: Candidate) {
+    case candidate.cell {
+      Some(FoodCell(food_count)) -> Ok(#(food_count, candidate))
+      _ -> Error(Nil)
+    }
+  })
+  |> list.sort(by: fn(a: #(Int, Candidate), b: #(Int, Candidate)) {
+    int.compare(b.0, a.0)
+  })
+  |> list.first
+  |> option.from_result
+  |> option.map(fn(x: #(Int, Candidate)) { x.1 })
 }
 
 fn best_pheromone(candidates: List(Candidate)) -> Option(Candidate) {
@@ -108,11 +122,29 @@ fn best_pheromone(candidates: List(Candidate)) -> Option(Candidate) {
   None
 }
 
-fn first_candidate(candidates: List(Candidate)) -> Option(Candidate) {
-  list.first(candidates)
+fn random_candidate(candidates: List(Candidate)) -> Option(Candidate) {
+  candidates
+  |> pick_random
   |> option.from_result
 }
 
 fn get_cell(board: Sender(board.Msg), position: Position) -> Option(Cell) {
   actor.call(board, fn(chan) { board.GiveCellInfo(position, chan) }, 50)
 }
+
+/// TODO: this would be nice to have in the stdlib
+fn list_nth(list list: List(a), nth n: Int) -> Result(a, Nil) {
+  list
+  |> list.drop(n)
+  |> list.first
+}
+
+/// TODO: this would be nice to have in the stdlib
+fn pick_random(from list: List(a)) -> Result(a, Nil) {
+  let n: Int = random_int(list.length(list))
+  list_nth(list, n)
+}
+
+/// TODO: this would be nice to have in the stdlib
+external fn random_int(n: Int) -> Int =
+  "rand" "uniform"

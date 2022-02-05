@@ -28,15 +28,11 @@ fn http_server(
   sim: Sender(simulation.Msg),
   _req: Request(BitString),
 ) -> Response(BitBuilder) {
-  io.println("Replying to a request!")
-
   let body =
     get_state(sim)
     |> state_to_json
     |> json.to_string_builder
     |> bit_builder.from_string_builder
-
-  io.println("Created body")
 
   response.new(200)
   |> response.prepend_header("Access-Control-Allow-Origin", "*")
