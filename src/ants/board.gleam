@@ -1,5 +1,3 @@
-///// TODO: this would be nice to have in the stdlib
-
 import ants/position.{Position}
 import ants/config
 import ants/cell.{Cell, FoodCell, HomeCell}
@@ -40,12 +38,11 @@ pub fn new() -> Board {
       #(position, FoodCell(random_int(config.food_range + 1) - 1))
     })
 
-  io.debug(food_cells)
-
   let cells =
     [home_cells, food_cells]
     |> list.flatten
     |> map.from_list
+
   Board(cells: cells)
 }
 
@@ -54,6 +51,7 @@ pub type Msg {
   TakeFood
   MarkWithPheromone
   GiveCellInfo(position: Position, to: Sender(Option(Cell)))
+  GiveBoard(to: Sender(Board))
 }
 
 pub fn update(msg: Msg, board: Board) -> Next(Board) {
@@ -62,22 +60,20 @@ pub fn update(msg: Msg, board: Board) -> Next(Board) {
     TakeFood -> take_food(board)
     MarkWithPheromone -> mark_with_pheromone(board)
     GiveCellInfo(position, chan) -> give_cell_info(position, chan, board)
+    GiveBoard(chan) -> give_board(chan, board)
   }
 }
 
 fn evaporate(board: Board) -> Next(Board) {
-  io.debug(board)
   io.println("TODO evaporate board")
   Continue(board)
 }
 
 fn take_food(board: Board) -> Next(Board) {
-  io.debug(board)
   todo("take_food board")
 }
 
 fn mark_with_pheromone(board: Board) -> Next(Board) {
-  io.debug(board)
   todo("mark_with_pheromone board")
 }
 
@@ -88,6 +84,11 @@ fn give_cell_info(
 ) -> Next(Board) {
   let cell = get_cell(board, position)
   actor.send(reply_chan, cell)
+  Continue(board)
+}
+
+fn give_board(reply_chan: Sender(Board), board: Board) -> Next(Board) {
+  actor.send(reply_chan, board)
   Continue(board)
 }
 

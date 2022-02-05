@@ -55,15 +55,7 @@ fn turn(dir: Direction, amount: Int) -> Direction {
   |> from_int
 }
 
-fn turn_counterclockwise(dir: Direction) -> Direction {
-  turn(dir, -1)
-}
-
-fn turn_clockwise(dir: Direction) -> Direction {
-  turn(dir, 1)
-}
-
-fn turn_opposite(dir: Direction) -> Direction {
+pub fn turn_opposite(dir: Direction) -> Direction {
   turn(dir, 4)
 }
 

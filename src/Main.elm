@@ -33,7 +33,7 @@ type Msg
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Time.every 1000 (\_ -> Tick)
+    Time.every 100 (\_ -> Tick)
 
 
 init : () -> ( Model, Cmd Msg )
@@ -143,24 +143,18 @@ boardDecoder : Decoder Board
 boardDecoder =
     Decode.map3 Board
         (Decode.field "size" Decode.int)
-        (Decode.field "cells"
-            (Decode.list
-                (Decode.map2 Tuple.pair
-                    positionDecoder
-                    cellDecoder
-                )
-            )
-            |> Decode.map Dict.fromList
+        (Decode.field "cells" (dictDecoder positionDecoder cellDecoder))
+        (Decode.field "ants" (dictDecoder positionDecoder antDecoder))
+
+
+dictDecoder : Decoder comparable -> Decoder v -> Decoder (Dict comparable v)
+dictDecoder keyDecoder valueDecoder =
+    Decode.list
+        (Decode.map2 Tuple.pair
+            (Decode.index 0 keyDecoder)
+            (Decode.index 1 valueDecoder)
         )
-        (Decode.field "ants"
-            (Decode.list
-                (Decode.map2 Tuple.pair
-                    positionDecoder
-                    antDecoder
-                )
-            )
-            |> Decode.map Dict.fromList
-        )
+        |> Decode.map Dict.fromList
 
 
 positionDecoder : Decoder Position

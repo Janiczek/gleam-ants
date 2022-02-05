@@ -1,7 +1,7 @@
 import ants/direction.{Direction}
 import ants/position.{Position}
 import ants/cell.{Cell, FoodCell}
-import ants/board.{Board}
+import ants/board
 import gleam/string
 import gleam/list
 import gleam/otp/process.{Sender}
@@ -24,11 +24,13 @@ pub fn new(direction: Direction, position: Position) -> Ant {
 
 pub type Msg {
   Tick
+  GiveAnt(to: Sender(Ant))
 }
 
 pub fn update(board: Sender(board.Msg), msg: Msg, ant: Ant) -> Next(Ant) {
   case msg {
     Tick -> tick(board, ant)
+    GiveAnt(chan) -> give_ant(chan, ant)
   }
 }
 
@@ -37,6 +39,11 @@ fn tick(board_msg_chan: Sender(board.Msg), ant: Ant) -> Next(Ant) {
     AntWithFood -> behave_with_food(ant)
     AntWithoutFood -> behave_without_food(board_msg_chan, ant)
   }
+}
+
+fn give_ant(chan: Sender(Ant), ant: Ant) -> Next(Ant) {
+  actor.send(chan, ant)
+  Continue(ant)
 }
 
 fn behave_with_food(ant: Ant) -> Next(Ant) {
@@ -56,17 +63,15 @@ fn take_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
 }
 
 fn go_to_cell(candidate: Candidate, ant: Ant) -> Next(Ant) {
-  io.println(string.concat([
-    "Going to cell: ",
-    position.to_string(candidate.position),
-  ]))
   let new_ant: Ant =
     Ant(..ant, direction: candidate.direction, position: candidate.position)
   Continue(new_ant)
 }
 
 fn turn_opposite(ant: Ant) -> Next(Ant) {
-  todo("turn opposite")
+  let new_ant: Ant =
+    Ant(..ant, direction: direction.turn_opposite(ant.direction))
+  Continue(new_ant)
 }
 
 type Candidate {
@@ -82,14 +87,10 @@ fn search_for_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
       Candidate(direction, position, cell)
     })
 
-  io.debug(candidates)
-
   let next: Option(Candidate) =
     best_food(candidates)
     |> option.lazy_or(fn() { best_pheromone(candidates) })
     |> option.lazy_or(fn() { first_candidate(candidates) })
-
-  io.debug(next)
 
   case next {
     Some(chosen) -> go_to_cell(chosen, ant)

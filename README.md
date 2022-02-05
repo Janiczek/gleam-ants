@@ -15,7 +15,7 @@ The main logic is in Gleam:
 
 The rendering is in Elm:
 
-* A request to `GET /` is made every 1s
+* A request to `GET /` is made every 100ms
 * Otherwise logic-less, just decoding the JSON and showing the result
 
 ## Run
