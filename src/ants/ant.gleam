@@ -1,7 +1,8 @@
 import ants/direction.{Direction}
 import ants/position.{Position}
-import ants/cell.{Cell, FoodCell}
+import ants/cell.{Cell}
 import ants/board
+import gleam/float
 import gleam/int
 import gleam/order
 import gleam/string
@@ -55,7 +56,7 @@ fn behave_with_food(ant: Ant) -> Next(Ant) {
 fn behave_without_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
   let cell = get_cell(board, ant.position)
   case cell {
-    Some(FoodCell(_)) -> take_food(board, ant)
+    Some(cell.FoodCell(_)) -> take_food(board, ant)
     _ -> search_for_food(board, ant)
   }
 }
@@ -107,7 +108,7 @@ fn best_food(candidates: List(Candidate)) -> Option(Candidate) {
   candidates
   |> list.filter_map(fn(candidate: Candidate) {
     case candidate.cell {
-      Some(FoodCell(food_count)) -> Ok(#(food_count, candidate))
+      Some(cell.FoodCell(food_count)) -> Ok(#(food_count, candidate))
       _ -> Error(Nil)
     }
   })
@@ -120,8 +121,20 @@ fn best_food(candidates: List(Candidate)) -> Option(Candidate) {
 }
 
 fn best_pheromone(candidates: List(Candidate)) -> Option(Candidate) {
-  io.println("TODO best pheromone")
-  None
+  candidates
+  |> list.filter_map(fn(candidate: Candidate) {
+    case candidate.cell {
+      Some(cell.PheromoneCell(pheromone_amount)) ->
+        Ok(#(pheromone_amount, candidate))
+      _ -> Error(Nil)
+    }
+  })
+  |> list.sort(by: fn(a: #(Float, Candidate), b: #(Float, Candidate)) {
+    float.compare(b.0, a.0)
+  })
+  |> list.first
+  |> option.from_result
+  |> option.map(fn(x: #(Float, Candidate)) { x.1 })
 }
 
 fn random_candidate(candidates: List(Candidate)) -> Option(Candidate) {
