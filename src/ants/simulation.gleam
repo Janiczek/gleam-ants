@@ -12,25 +12,29 @@ import gleam/otp/process.{Sender}
 pub fn start() {
   io.println("Spawning ants")
 
-  spawn_board()
-  spawn_ants()
+  let board = spawn_board()
+  spawn_ants(board)
   io.println("Simulation started!")
 }
 
-fn spawn_board() {
+fn spawn_board() -> Sender(board.Msg) {
   let new_board: Board = board.new()
   assert Ok(sender) = actor.start(new_board, board.update)
   start_evaporation_timer(sender)
+  sender
 }
 
-fn spawn_ants() {
+fn spawn_ants(board_msg_chan) {
   list.range(0, config.ants_count)
   |> list.each(fn(i) {
     let direction = direction.random()
-    // TODO make the positions random instead of sequential
     let position = position.from_int(i)
     let new_ant: Ant = ant.new(direction, position)
-    assert Ok(sender) = actor.start(new_ant, ant.update)
+    assert Ok(sender) =
+      actor.start(
+        new_ant,
+        fn(msg, board) { ant.update(board_msg_chan, msg, board) },
+      )
     start_ant_timer(sender)
   })
 }

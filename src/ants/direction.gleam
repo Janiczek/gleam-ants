@@ -48,23 +48,23 @@ fn from_int(for n: Int) -> Direction {
   // num >= 8
 }
 
-fn advance(dir: Direction, amount: Int) -> Direction {
+fn turn(dir: Direction, amount: Int) -> Direction {
   dir
   |> to_int
   |> fn(n) { n + amount }
   |> from_int
 }
 
-fn previous(dir: Direction) -> Direction {
-  advance(dir, -1)
+fn turn_counterclockwise(dir: Direction) -> Direction {
+  turn(dir, -1)
 }
 
-fn next(dir: Direction) -> Direction {
-  advance(dir, 1)
+fn turn_clockwise(dir: Direction) -> Direction {
+  turn(dir, 1)
 }
 
-fn opposite(dir: Direction) -> Direction {
-  advance(dir, 4)
+fn turn_opposite(dir: Direction) -> Direction {
+  turn(dir, 4)
 }
 
 fn delta(for dir: Direction) -> Position {
@@ -80,10 +80,17 @@ fn delta(for dir: Direction) -> Position {
   }
 }
 
-pub fn visible_directions(for dir: Direction) -> List(Direction) {
+pub fn visible(
+  for dir: Direction,
+  at pos: Position,
+) -> List(#(Direction, Position)) {
   let n = to_int(dir)
   [n - 1, n, n + 1]
   |> list.map(from_int)
+  |> list.map(fn(new_dir) {
+    let new_pos = position.add(pos, delta(new_dir))
+    #(new_dir, new_pos)
+  })
 }
 
 /// TODO: this would be nice to have in the stdlib

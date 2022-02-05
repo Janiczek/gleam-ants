@@ -1,10 +1,12 @@
 import ants/config
 import gleam/list
+import gleam/string
+import gleam/int
 
 pub type Position =
   #(Int, Int)
 
-fn plus(a: Position, b: Position) -> Position {
+pub fn add(a: Position, b: Position) -> Position {
   let #(ax, ay) = a
   let #(bx, by) = b
   #(ax + bx, ay + by)
@@ -17,7 +19,7 @@ pub fn from_int(n: Int) -> Position {
   let dx = n % config.home_width
   let dy = n / config.home_width
 
-  plus(home_nw, #(dx, dy))
+  add(home_nw, #(dx, dy))
 }
 
 fn get_home_nw() -> Position {
@@ -34,6 +36,11 @@ pub fn home_positions() -> List(Position) {
 pub fn all_positions() -> List(Position) {
   let range = list.range(0, config.board_width)
   cartesian_product(range, range)
+}
+
+pub fn to_string(position: Position) -> String {
+  let #(x, y) = position
+  string.concat(["(", int.to_string(x), ",", int.to_string(y), ")"])
 }
 
 /// TODO: this would be nice to have in the stdlib
