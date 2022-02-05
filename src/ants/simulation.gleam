@@ -5,19 +5,19 @@ import ants/ant.{Ant}
 import gleam/io
 import gleam/list
 import gleam/option.{Some}
-import gleam/otp/actor.{StartError, Ready, Continue, Spec}
+import gleam/otp/actor.{Continue, Ready, Spec, StartError}
 import gleam/otp/process.{Sender}
 
 pub fn start() {
   io.println("Spawning ants")
-  
+
   spawn_ants()
   start_evaporation_timer()
   io.println("Simulation started!")
 }
 
 fn spawn_ants() {
-  list.range(0,config.ants_count)
+  list.range(0, config.ants_count)
   |> list.each(fn(i) {
     let direction = direction.random()
     // TODO make the positions random instead of sequential
@@ -31,15 +31,15 @@ fn spawn_ants() {
 fn start_ant_timer(ant) {
   run_periodically(
     every: config.ant_tick_ms,
-    run: fn() { io.println("TODO: send Tick to the ant") }
-    //run: fn() { process.send(ant, ant.Tick) }
+    run: fn() { io.println("TODO: send Tick to the ant") },
   )
+  //run: fn() { process.send(ant, ant.Tick) }
 }
 
 fn start_evaporation_timer() {
   run_periodically(
     every: config.evaporation_tick_ms,
-    run: fn() { io.println("TODO: evaporate a little") }
+    run: fn() { io.println("TODO: evaporate a little") },
   )
 }
 

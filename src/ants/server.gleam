@@ -17,6 +17,6 @@ fn http_server(req: Request(BitString)) -> Response(BitBuilder) {
   let body = bit_builder.from_string("Hello, world!")
 
   response.new(200)
-  |> response.prepend_header("Access-Control-Allow-Origin","*")
+  |> response.prepend_header("Access-Control-Allow-Origin", "*")
   |> response.set_body(body)
 }

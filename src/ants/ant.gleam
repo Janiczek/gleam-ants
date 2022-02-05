@@ -4,11 +4,7 @@ import gleam/dynamic
 import gleam/otp/actor.{Next}
 
 pub type Ant {
-  Ant(
-    status: AntStatus,
-    direction: Direction,
-    position: Position
-  )
+  Ant(status: AntStatus, direction: Direction, position: Position)
 }
 
 pub type AntStatus {
@@ -17,11 +13,7 @@ pub type AntStatus {
 }
 
 pub fn new(direction: Direction, position: Position) -> Ant {
-  Ant(
-    status: AntWithoutFood,
-    direction: direction,
-    position: position
-  )
+  Ant(status: AntWithoutFood, direction: direction, position: position)
 }
 
 pub type Msg {
@@ -36,7 +28,7 @@ pub fn update(msg: Msg, ant: Ant) -> Next(Ant) {
 
 fn behave(ant: Ant) -> Ant {
   case ant.status {
-    AntWithFood    -> behave_with_food(ant)
+    AntWithFood -> behave_with_food(ant)
     AntWithoutFood -> behave_without_food(ant)
   }
 }
