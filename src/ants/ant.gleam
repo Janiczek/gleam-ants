@@ -4,6 +4,7 @@ import ants/cell.{Cell}
 import ants/board
 import gleam/pair
 import gleam/float
+import gleam/bool
 import gleam/int
 import gleam/order
 import gleam/map.{Map}
@@ -68,42 +69,6 @@ fn drop_food(cell: Cell, ant: Ant) -> Next(Ant) {
   Continue(Ant(..ant, status: AntWithoutFood))
 }
 
-fn return_home(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
-  let candidates: List(Candidate) =
-    direction.visible(for: ant.direction, at: ant.position)
-    |> list.filter_map(fn(candidate) {
-      let #(direction, position) = candidate
-      let cell = get_cell(board, position)
-      case cell.has_ant {
-        True -> Error(Nil)
-        False -> Ok(Candidate(direction, position, cell))
-      }
-    })
-  case candidates {
-    [] -> Continue(ant)
-    // wait one turn
-    _ -> {
-      let ranks_pheromone =
-        rank(candidates, fn(candidate: Candidate) { candidate.cell.pheromone })
-      let ranks_home =
-        rank(
-          candidates,
-          fn(candidate: Candidate) {
-            case candidate.cell.is_home {
-              True -> 1.
-              False -> 0.
-            }
-          },
-        )
-      let ranks = combine_ranks(ranks_pheromone, ranks_home)
-      case pick_random_wheel(ranks) {
-        Ok(chosen) -> go_to_cell(board, chosen, ant)
-        Error(Nil) -> Continue(ant)
-      }
-    }
-  }
-}
-
 fn behave_without_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
   let cell = get_cell(board, ant.position)
   case cell.food >= 1 {
@@ -125,59 +90,115 @@ fn take_food(board: Sender(board.Msg), cell: Cell, ant: Ant) -> Next(Ant) {
   Continue(new_ant)
 }
 
-fn go_to_cell(
+fn run_action(
   board: Sender(board.Msg),
   candidate: Candidate,
   ant: Ant,
 ) -> Next(Ant) {
-  // TODO is it OK that we're using data from a Candidate here?
-  // Is the cell already stale? We have no concept of transactions here...
-  assert False = candidate.cell.has_ant
-
-  mark_board_with_pheromone(board, ant.position)
-  notify_board_of_move(board, from: ant.position, to: candidate.position)
-
-  let new_ant: Ant =
-    Ant(..ant, direction: candidate.direction, position: candidate.position)
-
-  Continue(new_ant)
+  case candidate.cell.has_ant {
+    True -> Continue(ant)
+    False -> {
+      let new_dir = apply_action(ant.direction, candidate.action)
+      case candidate.action {
+        MoveForward -> {
+          let new_pos = direction.step(ant.position, new_dir)
+          mark_board_with_pheromone(board, ant.position)
+          notify_board_of_move(board, from: ant.position, to: new_pos)
+          Continue(Ant(..ant, position: new_pos))
+        }
+        TurnClockwise -> Continue(Ant(..ant, direction: new_dir))
+        TurnCounterclockwise -> Continue(Ant(..ant, direction: new_dir))
+      }
+    }
+  }
 }
 
 fn turn_opposite(ant: Ant) -> Ant {
   Ant(..ant, direction: direction.turn_opposite(ant.direction))
 }
 
+type CandidateAction {
+  MoveForward
+  TurnClockwise
+  TurnCounterclockwise
+}
+
 type Candidate {
-  Candidate(direction: Direction, position: Position, cell: Cell)
+  Candidate(action: CandidateAction, cell: Cell)
+}
+
+fn return_home(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
+  case find_candidates(board, ant) {
+    [] -> Continue(ant)
+    candidates -> {
+      let ranks_pheromone =
+        rank(candidates, fn(candidate: Candidate) { candidate.cell.pheromone })
+      let ranks_home =
+        rank(
+          candidates,
+          fn(candidate: Candidate) {
+            case candidate.cell.is_home {
+              True -> 1.
+              False -> 0.
+            }
+          },
+        )
+      let ranks = combine_ranks(ranks_pheromone, ranks_home)
+      case pick_random_wheel(ranks) {
+        Ok(chosen) -> run_action(board, chosen, ant)
+        Error(Nil) -> Continue(ant)
+      }
+    }
+  }
 }
 
 fn search_for_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
-  let candidates: List(Candidate) =
-    direction.visible(for: ant.direction, at: ant.position)
-    |> list.filter_map(fn(candidate) {
-      let #(direction, position) = candidate
-      let cell = get_cell(board, position)
-      case cell.has_ant {
-        True -> Error(Nil)
-        False -> Ok(Candidate(direction, position, cell))
+  let pos_ahead = direction.step(ant.position, ant.direction)
+  let cell_ahead = get_cell(board, pos_ahead)
+  case cell_ahead.food > 0 && bool.negate(cell_ahead.has_ant) {
+    True -> run_action(board, Candidate(MoveForward, cell_ahead), ant)
+    False ->
+      case find_candidates(board, ant) {
+        [] -> Continue(turn_opposite(ant))
+        candidates -> {
+          let ranks_pheromone =
+            rank(
+              candidates,
+              fn(candidate: Candidate) { candidate.cell.pheromone },
+            )
+          let ranks_food =
+            rank(
+              candidates,
+              fn(candidate: Candidate) { int.to_float(candidate.cell.food) },
+            )
+          let ranks = combine_ranks(ranks_pheromone, ranks_food)
+          case pick_random_wheel(ranks) {
+            Ok(chosen) -> run_action(board, chosen, ant)
+            Error(Nil) -> Continue(turn_opposite(ant))
+          }
+        }
       }
-    })
-  case candidates {
-    [] -> Continue(turn_opposite(ant))
-    _ -> {
-      let ranks_pheromone =
-        rank(candidates, fn(candidate: Candidate) { candidate.cell.pheromone })
-      let ranks_food =
-        rank(
-          candidates,
-          fn(candidate: Candidate) { int.to_float(candidate.cell.food) },
-        )
-      let ranks = combine_ranks(ranks_pheromone, ranks_food)
-      case pick_random_wheel(ranks) {
-        Ok(chosen) -> go_to_cell(board, chosen, ant)
-        Error(Nil) -> Continue(turn_opposite(ant))
-      }
+  }
+}
+
+fn find_candidates(board: Sender(board.Msg), ant: Ant) {
+  [MoveForward, TurnClockwise, TurnCounterclockwise]
+  |> list.filter_map(fn(action) {
+    let dir_after_action = apply_action(ant.direction, action)
+    let pos_in_front = direction.step(ant.position, dir_after_action)
+    let cell = get_cell(board, pos_in_front)
+    case cell.has_ant {
+      True -> Error(Nil)
+      False -> Ok(Candidate(action, cell))
     }
+  })
+}
+
+fn apply_action(dir: Direction, action: CandidateAction) -> Direction {
+  case action {
+    MoveForward -> dir
+    TurnClockwise -> direction.turn_clockwise(dir)
+    TurnCounterclockwise -> direction.turn_counterclockwise(dir)
   }
 }
 
@@ -203,6 +224,8 @@ fn notify_board_of_move(
 
 /// TODO: maybe a bit situational but still general purpose
 fn rank(list: List(a), by key: fn(a) -> Float) -> Map(a, Int) {
+  // TODO is this the correct way round? Are we then applying it the correct
+  // way round in the roulette wheel?
   let sorted = list.sort(list, fn(a, b) { float.compare(key(a), key(b)) })
   let range = list.range(1, list.length(list) + 1)
   list.zip(sorted, range)

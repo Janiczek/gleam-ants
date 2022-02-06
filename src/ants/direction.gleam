@@ -59,6 +59,14 @@ pub fn turn_opposite(dir: Direction) -> Direction {
   turn(dir, 4)
 }
 
+pub fn turn_clockwise(dir: Direction) -> Direction {
+  turn(dir, 1)
+}
+
+pub fn turn_counterclockwise(dir: Direction) -> Direction {
+  turn(dir, -1)
+}
+
 fn delta(for dir: Direction) -> Position {
   case dir {
     N -> #(0, -1)
@@ -70,6 +78,10 @@ fn delta(for dir: Direction) -> Position {
     W -> #(-1, 0)
     NW -> #(-1, -1)
   }
+}
+
+pub fn step(at pos: Position, for dir: Direction) -> Position {
+  position.bounded_add(pos, delta(dir))
 }
 
 pub fn visible(
