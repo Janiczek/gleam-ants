@@ -6,9 +6,11 @@ import Html exposing (Html)
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import List.Cartesian
+import Process
 import RemoteData exposing (RemoteData(..), WebData)
 import Svg exposing (Svg)
 import Svg.Attributes as SvgAttrs
+import Task
 import Time
 
 
@@ -33,22 +35,7 @@ type Msg
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    let
-        tick =
-            Time.every 40 (\_ -> Tick)
-    in
-    case model of
-        Loading ->
-            Sub.none
-
-        Failure _ ->
-            Sub.none
-
-        NotAsked ->
-            tick
-
-        Success _ ->
-            tick
+    Sub.none
 
 
 init : () -> ( Model, Cmd Msg )
@@ -65,7 +52,13 @@ update msg model =
             ( model, askForBoard )
 
         GotBoard webdata ->
-            ( webdata, Cmd.none )
+            ( webdata, tickAfterMs 100 )
+
+
+tickAfterMs : Float -> Cmd Msg
+tickAfterMs ms =
+    Process.sleep ms
+        |> Task.perform (\_ -> Tick)
 
 
 askForBoard : Cmd Msg
@@ -221,7 +214,7 @@ view model =
             Html.text "Loading..."
 
         Failure err ->
-            Html.text <| "Error: " ++ Debug.toString err
+            Html.text "Error"
 
         Success board ->
             viewBoard board
@@ -251,7 +244,7 @@ viewBoard board =
 
         maxPheromoneAmount : Float
         maxPheromoneAmount =
-            50
+            10
 
         grid : List (Svg Msg)
         grid =
@@ -305,14 +298,14 @@ viewBoard board =
                                 coord + halfCellSize
 
                             ( fillColor, opacity ) =
-                                if cell.isHome then
-                                    ( "#fffbeb", 1 )
-
-                                else if cell.food > 0 then
+                                if cell.food > 0 then
                                     ( "#65a30d", min 1 <| toFloat cell.food / maxFoodCount )
 
+                                else if cell.isHome then
+                                    ( "#fcd34d", 1 )
+
                                 else if cell.pheromone > 0 then
-                                    ( "#d946ef", min 1 <| cell.pheromone / maxPheromoneAmount )
+                                    ( "#c026d3", min 1 <| cell.pheromone / maxPheromoneAmount )
 
                                 else
                                     ( "none", 0 )

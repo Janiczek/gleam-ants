@@ -77,10 +77,10 @@ pub fn visible(
   at pos: Position,
 ) -> List(#(Direction, Position)) {
   let n = to_int(dir)
-  [n - 1, n, n + 1]
+  [n, n - 1, n + 1]
   |> list.map(from_int)
   |> list.map(fn(new_dir) {
-    let new_pos = position.add(pos, delta(new_dir))
+    let new_pos = position.bounded_add(pos, delta(new_dir))
     #(new_dir, new_pos)
   })
 }

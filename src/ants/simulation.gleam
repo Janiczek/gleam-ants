@@ -1,9 +1,10 @@
 import ants/config
 import ants/direction
-import ants/position
+import ants/position.{Position}
 import ants/board.{Board}
 import ants/ant.{Ant}
 import gleam/io
+import gleam/pair
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/otp/actor.{Continue, InitResult, Next, Ready, Spec, StartError}
@@ -29,7 +30,7 @@ pub type State {
 }
 
 pub type Msg {
-  GiveState(chan: Sender(State))
+  GiveState(to: Sender(State))
 }
 
 pub fn update(msg: Msg, sim: Simulation) -> Next(Simulation) {
@@ -55,33 +56,38 @@ fn spawn_board() -> Sender(board.Msg) {
   sender
 }
 
-fn spawn_ants(board_msg_chan) -> List(Sender(ant.Msg)) {
-  list.range(0, config.ants_count)
-  |> list.map(fn(i) {
-    let direction = direction.random()
-    let position = position.from_int(i)
-    let new_ant: Ant = ant.new(direction, position)
-    assert Ok(sender) =
-      actor.start(
-        new_ant,
-        fn(msg, board) { ant.update(board_msg_chan, msg, board) },
-      )
-    start_ant_timer(sender)
-    sender
+fn spawn_ants(board) -> List(Sender(ant.Msg)) {
+  let ants =
+    list.range(0, config.ants_count)
+    |> list.map(fn(i) {
+      let direction = direction.random()
+      let position = position.from_int(i)
+      let new_ant: Ant = ant.new(direction, position)
+      assert Ok(sender) =
+        actor.start(new_ant, fn(msg, ant) { ant.update(board, msg, ant) })
+      start_ant_timer(sender)
+      #(sender, position)
+    })
+  ants
+  |> list.each(fn(ant: #(Sender(ant.Msg), Position)) {
+    let position = ant.1
+    actor.send(board, board.AntStartsAt(position))
   })
+
+  list.map(ants, pair.first)
 }
 
-fn start_ant_timer(ant) {
+fn start_ant_timer(ant: Sender(ant.Msg)) {
   run_periodically(
     every: config.ant_tick_ms,
-    run: fn() { process.send(ant, ant.Tick) },
+    run: fn() { actor.send(ant, ant.Tick) },
   )
 }
 
-fn start_evaporation_timer(board) {
+fn start_evaporation_timer(board: Sender(board.Msg)) {
   run_periodically(
     every: config.evaporation_tick_ms,
-    run: fn() { process.send(board, board.Evaporate) },
+    run: fn() { actor.send(board, board.Evaporate) },
   )
 }
 

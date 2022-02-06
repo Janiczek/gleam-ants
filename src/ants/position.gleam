@@ -6,10 +6,23 @@ import gleam/int
 pub type Position =
   #(Int, Int)
 
-pub fn add(a: Position, b: Position) -> Position {
+fn add(a: Position, b: Position) -> Position {
   let #(ax, ay) = a
   let #(bx, by) = b
   #(ax + bx, ay + by)
+}
+
+pub fn bounded_add(a: Position, b: Position) -> Position {
+  let #(cx, cy) = add(a, b)
+  #(bounded(cx, config.board_width), bounded(cy, config.board_width))
+}
+
+fn bounded(n: Int, max: Int) -> Int {
+  let new_n: Int = n % max
+  case new_n < 0 {
+    True -> max + new_n
+    False -> new_n
+  }
 }
 
 /// Returns the position on the board,

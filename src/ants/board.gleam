@@ -31,7 +31,7 @@ pub fn new() -> Board {
   let home_cells: List(#(Position, Cell)) =
     home_positions
     |> list.map(fn(position) {
-      #(position, Cell(pheromone: 0., is_home: True, food: 0))
+      #(position, Cell(pheromone: 0., is_home: True, food: 0, has_ant: False))
     })
 
   let food_cells: List(#(Position, Cell)) =
@@ -43,6 +43,7 @@ pub fn new() -> Board {
           pheromone: 0.,
           is_home: False,
           food: random_int(config.food_range + 1) - 1,
+          has_ant: False,
         ),
       )
     })
@@ -61,6 +62,8 @@ pub type Msg {
   MarkWithPheromone(position: Position)
   GiveCellInfo(position: Position, to: Sender(Cell))
   GiveBoard(to: Sender(Board))
+  AntMovedFromTo(old: Position, new: Position)
+  AntStartsAt(position: Position)
 }
 
 pub fn update(msg: Msg, board: Board) -> Next(Board) {
@@ -70,6 +73,8 @@ pub fn update(msg: Msg, board: Board) -> Next(Board) {
     MarkWithPheromone(position) -> mark_with_pheromone(position, board)
     GiveCellInfo(position, chan) -> give_cell_info(position, chan, board)
     GiveBoard(chan) -> give_board(chan, board)
+    AntMovedFromTo(old, new) -> ant_moved_from_to(old, new, board)
+    AntStartsAt(position) -> ant_starts_at(position, board)
   }
 }
 
@@ -110,6 +115,34 @@ fn mark_with_pheromone(position: Position, board: Board) -> Next(Board) {
       |> map.insert(position, new_cell)
     }
   }))
+}
+
+fn ant_moved_from_to(old: Position, new: Position, board: Board) -> Next(Board) {
+  assert Ok(old_cell) = map.get(board.cells, old)
+  let old_cell_2 = Cell(..old_cell, has_ant: False)
+
+  let new_cell_2 = case map.get(board.cells, new) {
+    Error(Nil) -> Cell(..cell.empty, has_ant: True)
+    Ok(new_cell) -> Cell(..new_cell, has_ant: True)
+  }
+
+  Continue(Board(
+    cells: board.cells
+    |> map.insert(old, old_cell_2)
+    |> map.insert(new, new_cell_2),
+  ))
+}
+
+fn ant_starts_at(position: Position, board: Board) -> Next(Board) {
+  let new_cell: Cell = case map.get(board.cells, position) {
+    Error(Nil) -> Cell(..cell.empty, has_ant: True)
+    Ok(cell) -> Cell(..cell, has_ant: True)
+  }
+
+  Continue(Board(
+    cells: board.cells
+    |> map.insert(position, new_cell),
+  ))
 }
 
 fn give_cell_info(

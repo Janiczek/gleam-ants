@@ -2,13 +2,15 @@ import ants/direction.{Direction}
 import ants/position.{Position}
 import ants/cell.{Cell}
 import ants/board
+import gleam/pair
 import gleam/float
 import gleam/int
 import gleam/order
+import gleam/map.{Map}
 import gleam/string
 import gleam/list
 import gleam/otp/process.{Sender}
-import gleam/option.{None, Option, Some}
+import gleam/option
 import gleam/io
 import gleam/otp/actor.{Continue, Next}
 
@@ -61,26 +63,44 @@ fn drop_food(cell: Cell, ant: Ant) -> Next(Ant) {
   assert AntWithFood = ant.status
   assert True = cell.is_home
 
+  io.println("dropped food at home")
+
   Continue(Ant(..ant, status: AntWithoutFood))
 }
 
 fn return_home(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
   let candidates: List(Candidate) =
     direction.visible(for: ant.direction, at: ant.position)
-    |> list.map(fn(candidate) {
+    |> list.filter_map(fn(candidate) {
       let #(direction, position) = candidate
       let cell = get_cell(board, position)
-      Candidate(direction, position, cell)
+      case cell.has_ant {
+        True -> Error(Nil)
+        False -> Ok(Candidate(direction, position, cell))
+      }
     })
-
-  let next: Option(Candidate) =
-    home_candidate(candidates)
-    |> option.lazy_or(fn() { best_pheromone(candidates) })
-    |> option.lazy_or(fn() { random_candidate(candidates) })
-
-  case next {
-    Some(chosen) -> go_to_cell(board, chosen, ant)
-    None -> Continue(turn_opposite(ant))
+  case candidates {
+    [] -> Continue(ant)
+    // wait one turn
+    _ -> {
+      let ranks_pheromone =
+        rank(candidates, fn(candidate: Candidate) { candidate.cell.pheromone })
+      let ranks_home =
+        rank(
+          candidates,
+          fn(candidate: Candidate) {
+            case candidate.cell.is_home {
+              True -> 1.
+              False -> 0.
+            }
+          },
+        )
+      let ranks = combine_ranks(ranks_pheromone, ranks_home)
+      case pick_random_wheel(ranks) {
+        Ok(chosen) -> go_to_cell(board, chosen, ant)
+        Error(Nil) -> Continue(ant)
+      }
+    }
   }
 }
 
@@ -96,9 +116,12 @@ fn take_food(board: Sender(board.Msg), cell: Cell, ant: Ant) -> Next(Ant) {
   assert AntWithoutFood = ant.status
   assert True = cell.food >= 1
 
+  io.println(string.concat(["took food from ", position.to_string(ant.position)]))
+
   take_food_from_board(board, ant.position)
-  let new_ant: Ant = Ant(..ant, status: AntWithFood)
-  let new_ant: Ant = turn_opposite(new_ant)
+  let new_ant: Ant =
+    Ant(..ant, status: AntWithFood)
+    |> turn_opposite
   Continue(new_ant)
 }
 
@@ -107,9 +130,12 @@ fn go_to_cell(
   candidate: Candidate,
   ant: Ant,
 ) -> Next(Ant) {
-  // TODO can't go out of bounds
-  // TODO can't go where another ant already is
+  // TODO is it OK that we're using data from a Candidate here?
+  // Is the cell already stale? We have no concept of transactions here...
+  assert False = candidate.cell.has_ant
+
   mark_board_with_pheromone(board, ant.position)
+  notify_board_of_move(board, from: ant.position, to: candidate.position)
 
   let new_ant: Ant =
     Ant(..ant, direction: candidate.direction, position: candidate.position)
@@ -128,54 +154,31 @@ type Candidate {
 fn search_for_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
   let candidates: List(Candidate) =
     direction.visible(for: ant.direction, at: ant.position)
-    |> list.map(fn(candidate) {
+    |> list.filter_map(fn(candidate) {
       let #(direction, position) = candidate
       let cell = get_cell(board, position)
-      Candidate(direction, position, cell)
+      case cell.has_ant {
+        True -> Error(Nil)
+        False -> Ok(Candidate(direction, position, cell))
+      }
     })
-
-  //let ranks_pheromone: Map(Int,Candidate) = rank(candidates,fn(cell){cell.pheromone})
-  //let ranks_home: Map(Int, Candidate) = todo("rank home")
-  //let ranks = 
-  let next: Option(Candidate) =
-    best_food(candidates)
-    |> option.lazy_or(fn() { best_pheromone(candidates) })
-    |> option.lazy_or(fn() { random_candidate(candidates) })
-
-  case next {
-    Some(chosen) -> go_to_cell(board, chosen, ant)
-    None -> Continue(turn_opposite(ant))
+  case candidates {
+    [] -> Continue(turn_opposite(ant))
+    _ -> {
+      let ranks_pheromone =
+        rank(candidates, fn(candidate: Candidate) { candidate.cell.pheromone })
+      let ranks_food =
+        rank(
+          candidates,
+          fn(candidate: Candidate) { int.to_float(candidate.cell.food) },
+        )
+      let ranks = combine_ranks(ranks_pheromone, ranks_food)
+      case pick_random_wheel(ranks) {
+        Ok(chosen) -> go_to_cell(board, chosen, ant)
+        Error(Nil) -> Continue(turn_opposite(ant))
+      }
+    }
   }
-}
-
-fn home_candidate(candidates: List(Candidate)) -> Option(Candidate) {
-  candidates
-  |> list.find(fn(candidate: Candidate) { candidate.cell.is_home })
-  |> option.from_result
-}
-
-fn best_food(candidates: List(Candidate)) -> Option(Candidate) {
-  candidates
-  |> list.sort(by: fn(a: Candidate, b: Candidate) {
-    int.compare(b.cell.food, a.cell.food)
-  })
-  |> list.first
-  |> option.from_result
-}
-
-fn best_pheromone(candidates: List(Candidate)) -> Option(Candidate) {
-  candidates
-  |> list.sort(by: fn(a: Candidate, b: Candidate) {
-    float.compare(b.cell.pheromone, a.cell.pheromone)
-  })
-  |> list.first
-  |> option.from_result
-}
-
-fn random_candidate(candidates: List(Candidate)) -> Option(Candidate) {
-  candidates
-  |> pick_random
-  |> option.from_result
 }
 
 fn get_cell(board: Sender(board.Msg), position: Position) -> Cell {
@@ -190,17 +193,60 @@ fn mark_board_with_pheromone(board: Sender(board.Msg), position: Position) {
   actor.send(board, board.MarkWithPheromone(position))
 }
 
-/// TODO: this would be nice to have in the stdlib
-fn list_nth(list list: List(a), nth n: Int) -> Result(a, Nil) {
-  list
-  |> list.drop(n)
-  |> list.first
+fn notify_board_of_move(
+  board: Sender(board.Msg),
+  from old: Position,
+  to new: Position,
+) {
+  actor.send(board, board.AntMovedFromTo(old, new))
 }
 
-/// TODO: this would be nice to have in the stdlib
-fn pick_random(from list: List(a)) -> Result(a, Nil) {
-  let n: Int = random_int(list.length(list))
-  list_nth(list, n)
+/// TODO: maybe a bit situational but still general purpose
+fn rank(list: List(a), by key: fn(a) -> Float) -> Map(a, Int) {
+  let sorted = list.sort(list, fn(a, b) { float.compare(key(a), key(b)) })
+  let range = list.range(1, list.length(list) + 1)
+  list.zip(sorted, range)
+  |> map.from_list
+}
+
+fn combine_ranks(ranks1: Map(a, Int), ranks2: Map(a, Int)) -> List(#(a, Int)) {
+  ranks1
+  |> map.to_list
+  |> list.map(fn(i1) {
+    let #(item1, rank1) = i1
+    case map.get(ranks2, item1) {
+      Ok(rank2) -> #(item1, rank1 + rank2)
+      Error(Nil) -> i1
+    }
+  })
+}
+
+/// TODO: maybe a bit situational but maybe good for a PRNG lib
+fn pick_random_wheel(from list: List(#(a, Int))) -> Result(a, Nil) {
+  let total: Int =
+    list
+    |> list.map(pair.second)
+    |> list.fold(0, fn(a, b) { a + b })
+  let rand: Int = random_int(total)
+  pick_random_wheel_help(0, rand, list)
+}
+
+fn pick_random_wheel_help(
+  sum: Int,
+  rand: Int,
+  items: List(#(a, Int)),
+) -> Result(a, Nil) {
+  case items {
+    [] -> Error(Nil)
+    [x] -> Ok(x.0)
+    [x, ..xs] -> {
+      let new_sum = sum + x.1
+      case rand < new_sum {
+        True -> Ok(x.0)
+        False -> pick_random_wheel_help(new_sum, rand, xs)
+      }
+    }
+  }
 }
 
 /// TODO: this would be nice to have in the stdlib
