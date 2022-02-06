@@ -65,27 +65,44 @@ pub fn update(msg: Msg, board: Board) -> Next(Board) {
 }
 
 fn evaporate(board: Board) -> Next(Board) {
-  Continue(
-    Board(
-      ..board,
-      cells: board.cells
-      |> map.map_values(fn(_, cell) {
-        case cell {
-          cell.PheromoneCell(amount) ->
-            cell.PheromoneCell(amount *. config.evaporation_rate)
-          _ -> cell
-        }
-      }),
-    ),
-  )
+  Continue(Board(
+    cells: board.cells
+    |> map.map_values(fn(_, cell) {
+      case cell {
+        cell.PheromoneCell(amount) ->
+          cell.PheromoneCell(amount *. config.evaporation_rate)
+        _ -> cell
+      }
+    }),
+  ))
 }
 
 fn take_food(position: Position, board: Board) -> Next(Board) {
-  todo("take_food board")
+  assert Ok(cell.FoodCell(count)) = map.get(board.cells, position)
+  Continue(Board(cells: case count == 1 {
+    True ->
+      board.cells
+      |> map.delete(position)
+    False ->
+      board.cells
+      |> map.insert(position, cell.FoodCell(count - 1))
+  }))
 }
 
 fn mark_with_pheromone(position: Position, board: Board) -> Next(Board) {
-  todo("mark_with_pheromone board")
+  let do_mark = fn(current_amount: Float) {
+    let new_amount = current_amount +. 1.
+    Continue(Board(
+      cells: board.cells
+      |> map.insert(position, cell.PheromoneCell(new_amount)),
+    ))
+  }
+
+  case map.get(board.cells, position) {
+    Ok(cell.PheromoneCell(amount)) -> do_mark(amount)
+    Error(_) -> do_mark(0.)
+    _ -> Continue(board)
+  }
 }
 
 fn give_cell_info(

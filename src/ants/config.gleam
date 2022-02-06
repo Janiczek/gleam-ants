@@ -2,7 +2,8 @@ pub const board_width: Int = 80
 
 pub const home_width: Int = 7
 
-pub const ants_count: Int = 49
+// 49
+pub const ants_count: Int = 1
 
 pub const food_places: Int = 35
 

@@ -8,7 +8,7 @@ pub fn main() {
     actor.start_spec(Spec(
       init: simulation.init,
       loop: simulation.update,
-      init_timeout: 50,
+      init_timeout: 100,
     ))
   server.start(sim_chan)
 

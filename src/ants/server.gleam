@@ -41,7 +41,7 @@ fn http_server(
 }
 
 fn get_state(sim: Sender(simulation.Msg)) -> simulation.State {
-  actor.call(sim, simulation.GiveState, 50)
+  actor.call(sim, simulation.GiveState, 100)
 }
 
 fn state_to_json(state: simulation.State) -> Json {

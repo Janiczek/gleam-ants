@@ -39,10 +39,10 @@ pub fn update(msg: Msg, sim: Simulation) -> Next(Simulation) {
 }
 
 fn give_state(chan: Sender(State), sim: Simulation) -> Next(Simulation) {
-  let board: Board = actor.call(sim.board, board.GiveBoard, 50)
+  let board: Board = actor.call(sim.board, board.GiveBoard, 100)
   let ants: List(Ant) =
     sim.ants
-    |> list.map(fn(ant) { actor.call(ant, ant.GiveAnt, 50) })
+    |> list.map(fn(ant) { actor.call(ant, ant.GiveAnt, 100) })
   let state: State = State(board: board, ants: ants)
   actor.send(chan, state)
   Continue(sim)
@@ -103,5 +103,5 @@ fn run_periodically(
     Continue(sender)
   }
 
-  actor.start_spec(Spec(init: init, loop: loop, init_timeout: 50))
+  actor.start_spec(Spec(init: init, loop: loop, init_timeout: 100))
 }

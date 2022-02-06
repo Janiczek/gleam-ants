@@ -39,7 +39,7 @@ pub fn update(board: Sender(board.Msg), msg: Msg, ant: Ant) -> Next(Ant) {
 
 fn tick(board_msg_chan: Sender(board.Msg), ant: Ant) -> Next(Ant) {
   case ant.status {
-    AntWithFood -> behave_with_food(ant)
+    AntWithFood -> behave_with_food(board_msg_chan, ant)
     AntWithoutFood -> behave_without_food(board_msg_chan, ant)
   }
 }
@@ -49,21 +49,58 @@ fn give_ant(chan: Sender(Ant), ant: Ant) -> Next(Ant) {
   Continue(ant)
 }
 
-fn behave_with_food(ant: Ant) -> Next(Ant) {
-  todo("behave with food")
+fn behave_with_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
+  let cell = get_cell(board, ant.position)
+  case cell {
+    Some(cell.HomeCell) -> drop_food(cell, ant)
+    _ -> return_home(board, ant)
+  }
+}
+
+fn drop_food(cell: Option(Cell), ant: Ant) -> Next(Ant) {
+  assert AntWithFood = ant.status
+  assert Some(cell.HomeCell) = cell
+
+  Continue(Ant(..ant, status: AntWithoutFood))
+}
+
+fn return_home(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
+  let candidates: List(Candidate) =
+    direction.visible(for: ant.direction, at: ant.position)
+    |> list.map(fn(candidate) {
+      let #(direction, position) = candidate
+      let cell = get_cell(board, position)
+      Candidate(direction, position, cell)
+    })
+
+  mark_board_with_pheromone(board, ant.position)
+
+  let next: Option(Candidate) =
+    home_candidate(candidates)
+    |> option.lazy_or(fn() { best_pheromone(candidates) })
+    |> option.lazy_or(fn() { random_candidate(candidates) })
+
+  case next {
+    Some(chosen) -> go_to_cell(chosen, ant)
+    None -> Continue(turn_opposite(ant))
+  }
 }
 
 fn behave_without_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
   let cell = get_cell(board, ant.position)
   case cell {
-    Some(cell.FoodCell(_)) -> take_food(board, ant)
+    Some(cell.FoodCell(_)) -> take_food(board, cell, ant)
     _ -> search_for_food(board, ant)
   }
 }
 
-fn take_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
+fn take_food(
+  board: Sender(board.Msg),
+  cell: Option(Cell),
+  ant: Ant,
+) -> Next(Ant) {
   assert AntWithoutFood = ant.status
-  assert Some(cell.FoodCell(_)) = get_cell(board, ant.position)
+  assert Some(cell.FoodCell(_)) = cell
 
   take_food_from_board(board, ant.position)
   let new_ant: Ant = Ant(..ant, status: AntWithFood)
@@ -107,6 +144,17 @@ fn search_for_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
   }
 }
 
+fn home_candidate(candidates: List(Candidate)) -> Option(Candidate) {
+  candidates
+  |> list.find(fn(candidate: Candidate) {
+    case candidate.cell {
+      Some(cell.HomeCell) -> True
+      _ -> False
+    }
+  })
+  |> option.from_result
+}
+
 fn best_food(candidates: List(Candidate)) -> Option(Candidate) {
   candidates
   |> list.filter_map(fn(candidate: Candidate) {
@@ -147,11 +195,15 @@ fn random_candidate(candidates: List(Candidate)) -> Option(Candidate) {
 }
 
 fn get_cell(board: Sender(board.Msg), position: Position) -> Option(Cell) {
-  actor.call(board, fn(chan) { board.GiveCellInfo(position, chan) }, 50)
+  actor.call(board, fn(chan) { board.GiveCellInfo(position, chan) }, 100)
 }
 
 fn take_food_from_board(board: Sender(board.Msg), position: Position) {
   actor.send(board, board.TakeFood(position))
+}
+
+fn mark_board_with_pheromone(board: Sender(board.Msg), position: Position) {
+  actor.send(board, board.MarkWithPheromone(position))
 }
 
 /// TODO: this would be nice to have in the stdlib
