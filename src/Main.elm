@@ -33,48 +33,27 @@ type Msg
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Time.every 40 (\_ -> Tick)
+    let
+        tick =
+            Time.every 40 (\_ -> Tick)
+    in
+    case model of
+        Loading ->
+            Sub.none
+
+        Failure _ ->
+            Sub.none
+
+        NotAsked ->
+            tick
+
+        Success _ ->
+            tick
 
 
 init : () -> ( Model, Cmd Msg )
 init () =
     ( Loading
-      {-
-         Success
-           { size = 40
-           , cells =
-               Dict.fromList
-                   [ ( ( 3, 5 ), HomeCell )
-                   , ( ( 5, 6 ), FoodCell { foodCount = 3 } )
-                   , ( ( 5, 7 ), FoodCell { foodCount = 8 } )
-                   , ( ( 5, 8 ), FoodCell { foodCount = 30 } )
-                   , ( ( 5, 9 ), FoodCell { foodCount = 1 } )
-                   , ( ( 10, 6 ), PheromoneCell { pheromoneAmount = 0.55 } )
-                   , ( ( 10, 7 ), PheromoneCell { pheromoneAmount = 3.55 } )
-                   , ( ( 10, 8 ), PheromoneCell { pheromoneAmount = 8.55 } )
-                   , ( ( 10, 9 ), PheromoneCell { pheromoneAmount = 20.55 } )
-                   ]
-           , ants =
-               Dict.fromList
-                   [ ( ( 2, 3 ), Ant AntWithoutFood N )
-                   , ( ( 2, 4 ), Ant AntWithoutFood NE )
-                   , ( ( 2, 5 ), Ant AntWithoutFood E )
-                   , ( ( 2, 6 ), Ant AntWithoutFood SE )
-                   , ( ( 2, 7 ), Ant AntWithoutFood S )
-                   , ( ( 2, 8 ), Ant AntWithoutFood SW )
-                   , ( ( 2, 9 ), Ant AntWithoutFood W )
-                   , ( ( 2, 10 ), Ant AntWithoutFood NW )
-                   , ( ( 4, 3 ), Ant AntWithFood N )
-                   , ( ( 4, 4 ), Ant AntWithFood NE )
-                   , ( ( 4, 5 ), Ant AntWithFood E )
-                   , ( ( 4, 6 ), Ant AntWithFood SE )
-                   , ( ( 4, 7 ), Ant AntWithFood S )
-                   , ( ( 4, 8 ), Ant AntWithFood SW )
-                   , ( ( 4, 9 ), Ant AntWithFood W )
-                   , ( ( 4, 10 ), Ant AntWithFood NW )
-                   ]
-           }
-      -}
     , askForBoard
     )
 
@@ -111,10 +90,11 @@ type alias Position =
     ( Int, Int )
 
 
-type Cell
-    = HomeCell
-    | FoodCell { foodCount : Int }
-    | PheromoneCell { pheromoneAmount : Float }
+type alias Cell =
+    { isHome : Bool
+    , food : Int
+    , pheromone : Float
+    }
 
 
 type alias Ant =
@@ -166,24 +146,10 @@ positionDecoder =
 
 cellDecoder : Decoder Cell
 cellDecoder =
-    Decode.field "type" Decode.string
-        |> Decode.andThen
-            (\type_ ->
-                case type_ of
-                    "home" ->
-                        Decode.succeed HomeCell
-
-                    "food" ->
-                        Decode.map (\count -> FoodCell { foodCount = count })
-                            (Decode.field "count" Decode.int)
-
-                    "pheromone" ->
-                        Decode.map (\amount -> PheromoneCell { pheromoneAmount = amount })
-                            (Decode.field "amount" Decode.float)
-
-                    _ ->
-                        Decode.fail <| "Unknown cell type: '" ++ type_ ++ "'"
-            )
+    Decode.map3 Cell
+        (Decode.field "is_home" Decode.bool)
+        (Decode.field "food" Decode.int)
+        (Decode.field "pheromone" Decode.float)
 
 
 antDecoder : Decoder Ant
@@ -325,9 +291,10 @@ viewBoard board =
                             ant =
                                 Dict.get position board.ants
 
-                            cell : Maybe Cell
+                            cell : Cell
                             cell =
                                 Dict.get position board.cells
+                                    |> Maybe.withDefault (Cell False 0 0)
 
                             ( svgX, svgY ) =
                                 ( toFloat x * cellSize
@@ -338,18 +305,17 @@ viewBoard board =
                                 coord + halfCellSize
 
                             ( fillColor, opacity ) =
-                                case cell of
-                                    Nothing ->
-                                        ( "none", 0 )
+                                if cell.isHome then
+                                    ( "#fffbeb", 1 )
 
-                                    Just HomeCell ->
-                                        ( "#fffbeb", 1 )
+                                else if cell.food > 0 then
+                                    ( "#65a30d", min 1 <| toFloat cell.food / maxFoodCount )
 
-                                    Just (FoodCell { foodCount }) ->
-                                        ( "#65a30d", min 1 <| toFloat foodCount / maxFoodCount )
+                                else if cell.pheromone > 0 then
+                                    ( "#d946ef", min 1 <| cell.pheromone / maxPheromoneAmount )
 
-                                    Just (PheromoneCell { pheromoneAmount }) ->
-                                        ( "#d946ef", min 1 <| pheromoneAmount / maxPheromoneAmount )
+                                else
+                                    ( "none", 0 )
 
                             cellView =
                                 Svg.rect

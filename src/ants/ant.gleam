@@ -51,15 +51,15 @@ fn give_ant(chan: Sender(Ant), ant: Ant) -> Next(Ant) {
 
 fn behave_with_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
   let cell = get_cell(board, ant.position)
-  case cell {
-    Some(cell.HomeCell) -> drop_food(cell, ant)
-    _ -> return_home(board, ant)
+  case cell.is_home {
+    True -> drop_food(cell, ant)
+    False -> return_home(board, ant)
   }
 }
 
-fn drop_food(cell: Option(Cell), ant: Ant) -> Next(Ant) {
+fn drop_food(cell: Cell, ant: Ant) -> Next(Ant) {
   assert AntWithFood = ant.status
-  assert Some(cell.HomeCell) = cell
+  assert True = cell.is_home
 
   Continue(Ant(..ant, status: AntWithoutFood))
 }
@@ -73,34 +73,28 @@ fn return_home(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
       Candidate(direction, position, cell)
     })
 
-  mark_board_with_pheromone(board, ant.position)
-
   let next: Option(Candidate) =
     home_candidate(candidates)
     |> option.lazy_or(fn() { best_pheromone(candidates) })
     |> option.lazy_or(fn() { random_candidate(candidates) })
 
   case next {
-    Some(chosen) -> go_to_cell(chosen, ant)
+    Some(chosen) -> go_to_cell(board, chosen, ant)
     None -> Continue(turn_opposite(ant))
   }
 }
 
 fn behave_without_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
   let cell = get_cell(board, ant.position)
-  case cell {
-    Some(cell.FoodCell(_)) -> take_food(board, cell, ant)
-    _ -> search_for_food(board, ant)
+  case cell.food >= 1 {
+    True -> take_food(board, cell, ant)
+    False -> search_for_food(board, ant)
   }
 }
 
-fn take_food(
-  board: Sender(board.Msg),
-  cell: Option(Cell),
-  ant: Ant,
-) -> Next(Ant) {
+fn take_food(board: Sender(board.Msg), cell: Cell, ant: Ant) -> Next(Ant) {
   assert AntWithoutFood = ant.status
-  assert Some(cell.FoodCell(_)) = cell
+  assert True = cell.food >= 1
 
   take_food_from_board(board, ant.position)
   let new_ant: Ant = Ant(..ant, status: AntWithFood)
@@ -108,11 +102,18 @@ fn take_food(
   Continue(new_ant)
 }
 
-fn go_to_cell(candidate: Candidate, ant: Ant) -> Next(Ant) {
+fn go_to_cell(
+  board: Sender(board.Msg),
+  candidate: Candidate,
+  ant: Ant,
+) -> Next(Ant) {
   // TODO can't go out of bounds
   // TODO can't go where another ant already is
+  mark_board_with_pheromone(board, ant.position)
+
   let new_ant: Ant =
     Ant(..ant, direction: candidate.direction, position: candidate.position)
+
   Continue(new_ant)
 }
 
@@ -121,7 +122,7 @@ fn turn_opposite(ant: Ant) -> Ant {
 }
 
 type Candidate {
-  Candidate(direction: Direction, position: Position, cell: Option(Cell))
+  Candidate(direction: Direction, position: Position, cell: Cell)
 }
 
 fn search_for_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
@@ -133,59 +134,42 @@ fn search_for_food(board: Sender(board.Msg), ant: Ant) -> Next(Ant) {
       Candidate(direction, position, cell)
     })
 
+  //let ranks_pheromone: Map(Int,Candidate) = rank(candidates,fn(cell){cell.pheromone})
+  //let ranks_home: Map(Int, Candidate) = todo("rank home")
+  //let ranks = 
   let next: Option(Candidate) =
     best_food(candidates)
     |> option.lazy_or(fn() { best_pheromone(candidates) })
     |> option.lazy_or(fn() { random_candidate(candidates) })
 
   case next {
-    Some(chosen) -> go_to_cell(chosen, ant)
+    Some(chosen) -> go_to_cell(board, chosen, ant)
     None -> Continue(turn_opposite(ant))
   }
 }
 
 fn home_candidate(candidates: List(Candidate)) -> Option(Candidate) {
   candidates
-  |> list.find(fn(candidate: Candidate) {
-    case candidate.cell {
-      Some(cell.HomeCell) -> True
-      _ -> False
-    }
-  })
+  |> list.find(fn(candidate: Candidate) { candidate.cell.is_home })
   |> option.from_result
 }
 
 fn best_food(candidates: List(Candidate)) -> Option(Candidate) {
   candidates
-  |> list.filter_map(fn(candidate: Candidate) {
-    case candidate.cell {
-      Some(cell.FoodCell(food_count)) -> Ok(#(food_count, candidate))
-      _ -> Error(Nil)
-    }
-  })
-  |> list.sort(by: fn(a: #(Int, Candidate), b: #(Int, Candidate)) {
-    int.compare(b.0, a.0)
+  |> list.sort(by: fn(a: Candidate, b: Candidate) {
+    int.compare(b.cell.food, a.cell.food)
   })
   |> list.first
   |> option.from_result
-  |> option.map(fn(x: #(Int, Candidate)) { x.1 })
 }
 
 fn best_pheromone(candidates: List(Candidate)) -> Option(Candidate) {
   candidates
-  |> list.filter_map(fn(candidate: Candidate) {
-    case candidate.cell {
-      Some(cell.PheromoneCell(pheromone_amount)) ->
-        Ok(#(pheromone_amount, candidate))
-      _ -> Error(Nil)
-    }
-  })
-  |> list.sort(by: fn(a: #(Float, Candidate), b: #(Float, Candidate)) {
-    float.compare(b.0, a.0)
+  |> list.sort(by: fn(a: Candidate, b: Candidate) {
+    float.compare(b.cell.pheromone, a.cell.pheromone)
   })
   |> list.first
   |> option.from_result
-  |> option.map(fn(x: #(Float, Candidate)) { x.1 })
 }
 
 fn random_candidate(candidates: List(Candidate)) -> Option(Candidate) {
@@ -194,7 +178,7 @@ fn random_candidate(candidates: List(Candidate)) -> Option(Candidate) {
   |> option.from_result
 }
 
-fn get_cell(board: Sender(board.Msg), position: Position) -> Option(Cell) {
+fn get_cell(board: Sender(board.Msg), position: Position) -> Cell {
   actor.call(board, fn(chan) { board.GiveCellInfo(position, chan) }, 100)
 }
 

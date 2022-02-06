@@ -1,5 +1,5 @@
 pub type Cell {
-  HomeCell
-  FoodCell(food_count: Int)
-  PheromoneCell(pheromone_amount: Float)
+  Cell(pheromone: Float, is_home: Bool, food: Int)
 }
+
+pub const empty: Cell = Cell(pheromone: 0., is_home: False, food: 0)

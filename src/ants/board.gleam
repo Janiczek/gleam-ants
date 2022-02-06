@@ -2,9 +2,9 @@ import ants/position.{Position}
 import ants/config
 import ants/cell.{Cell}
 import gleam/bool
-import gleam/option.{Option}
 import gleam/set.{Set}
 import gleam/map.{Map}
+import gleam/result
 import gleam/io
 import gleam/list
 import gleam/otp/actor.{Continue, Next}
@@ -14,10 +14,10 @@ pub type Board {
   Board(cells: Map(Position, Cell))
 }
 
-pub fn get_cell(board: Board, position: Position) -> Option(Cell) {
+pub fn get_cell(board: Board, position: Position) -> Cell {
   board.cells
   |> map.get(position)
-  |> option.from_result
+  |> result.unwrap(cell.empty)
 }
 
 pub fn new() -> Board {
@@ -30,12 +30,21 @@ pub fn new() -> Board {
 
   let home_cells: List(#(Position, Cell)) =
     home_positions
-    |> list.map(fn(position) { #(position, cell.HomeCell) })
+    |> list.map(fn(position) {
+      #(position, Cell(pheromone: 0., is_home: True, food: 0))
+    })
 
   let food_cells: List(#(Position, Cell)) =
     sample_n(n: config.food_places, from: possible_food_positions)
     |> list.map(fn(position) {
-      #(position, cell.FoodCell(random_int(config.food_range + 1) - 1))
+      #(
+        position,
+        Cell(
+          pheromone: 0.,
+          is_home: False,
+          food: random_int(config.food_range + 1) - 1,
+        ),
+      )
     })
 
   let cells =
@@ -50,7 +59,7 @@ pub type Msg {
   Evaporate
   TakeFood(position: Position)
   MarkWithPheromone(position: Position)
-  GiveCellInfo(position: Position, to: Sender(Option(Cell)))
+  GiveCellInfo(position: Position, to: Sender(Cell))
   GiveBoard(to: Sender(Board))
 }
 
@@ -68,46 +77,44 @@ fn evaporate(board: Board) -> Next(Board) {
   Continue(Board(
     cells: board.cells
     |> map.map_values(fn(_, cell) {
-      case cell {
-        cell.PheromoneCell(amount) ->
-          cell.PheromoneCell(amount *. config.evaporation_rate)
-        _ -> cell
-      }
+      Cell(..cell, pheromone: cell.pheromone *. config.evaporation_rate)
     }),
   ))
 }
 
 fn take_food(position: Position, board: Board) -> Next(Board) {
-  assert Ok(cell.FoodCell(count)) = map.get(board.cells, position)
-  Continue(Board(cells: case count == 1 {
-    True ->
-      board.cells
-      |> map.delete(position)
+  let Ok(cell) = map.get(board.cells, position)
+  case cell.food < 1 {
+    True -> {
+      assert True = False
+      Continue(board)
+    }
     False ->
-      board.cells
-      |> map.insert(position, cell.FoodCell(count - 1))
-  }))
+      Continue(Board(
+        cells: board.cells
+        |> map.insert(position, Cell(..cell, food: cell.food - 1)),
+      ))
+  }
 }
 
 fn mark_with_pheromone(position: Position, board: Board) -> Next(Board) {
-  let do_mark = fn(current_amount: Float) {
-    let new_amount = current_amount +. 1.
-    Continue(Board(
-      cells: board.cells
-      |> map.insert(position, cell.PheromoneCell(new_amount)),
-    ))
-  }
-
-  case map.get(board.cells, position) {
-    Ok(cell.PheromoneCell(amount)) -> do_mark(amount)
-    Error(_) -> do_mark(0.)
-    _ -> Continue(board)
-  }
+  Continue(Board(cells: case map.get(board.cells, position) {
+    Ok(cell) -> {
+      let new_cell = Cell(..cell, pheromone: cell.pheromone +. 1.)
+      board.cells
+      |> map.insert(position, new_cell)
+    }
+    Error(Nil) -> {
+      let new_cell = Cell(..cell.empty, pheromone: 1.)
+      board.cells
+      |> map.insert(position, new_cell)
+    }
+  }))
 }
 
 fn give_cell_info(
   position: Position,
-  reply_chan: Sender(Option(Cell)),
+  reply_chan: Sender(Cell),
   board: Board,
 ) -> Next(Board) {
   let cell = get_cell(board, position)

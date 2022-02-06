@@ -66,19 +66,11 @@ fn position_to_json(position: Position) -> Json {
 }
 
 fn cell_to_json(cell: Cell) -> Json {
-  case cell {
-    cell.HomeCell -> json.object([#("type", json.string("home"))])
-    cell.FoodCell(food_count) ->
-      json.object([
-        #("type", json.string("food")),
-        #("count", json.int(food_count)),
-      ])
-    cell.PheromoneCell(pheromone_amount) ->
-      json.object([
-        #("type", json.string("pheromone")),
-        #("amount", json.float(pheromone_amount)),
-      ])
-  }
+  json.object([
+    #("is_home", json.bool(cell.is_home)),
+    #("food", json.int(cell.food)),
+    #("pheromone", json.float(cell.pheromone)),
+  ])
 }
 
 fn ant_to_json(ant: Ant) -> Json {
